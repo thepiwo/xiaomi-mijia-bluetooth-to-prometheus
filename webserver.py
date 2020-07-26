@@ -2,13 +2,14 @@
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import subprocess
 import logging
+import os
 
 # 127.0.0.1 to allow only local usages
 # 0.0.0.0 to allow other computers in your network to access the service
 ADDRESS = "0.0.0.0"
-PORT = 9191
+PORT = int(os.environ['PORT'])
 # This is the MAC of my probe. Put you own here!
-YOUR_PROBE_MAC_ADDRESS = "4C:65:A8:D4:C5:2D"
+YOUR_PROBE_MAC_ADDRESS = os.environ['MAC']
 
 log = logging.getLogger("my-logger")
 
@@ -67,7 +68,7 @@ def parse_temperature_humidity_hex_to_plaintext(data_hex):
     if hex.endswith("00"):
         hex = hex[:-3]
     hex = hex.split(' ')
-    return ''.join([str(chr(int(x, 16))) for x in hex])
+    return [int(''.join([hex[1], hex[0]]), 16)/100, int(hex[2], 16)]
 
 
 def parse_temperature_humidity_plaintext_to_numeric(data_plaintext):
@@ -76,10 +77,9 @@ def parse_temperature_humidity_plaintext_to_numeric(data_plaintext):
     >>> r == {'temperature': 28.3, 'hygrometry': 54.1}
     True
     """
-    data_plaintext_splitted = data_plaintext.split(' ')
     return {
-        'temperature': float(data_plaintext_splitted[0].split('=')[1]),
-        'hygrometry': float(data_plaintext_splitted[1].split('=')[1])
+        'temperature': float(data_plaintext[0]),
+        'hygrometry': float(data_plaintext[1])
     }
 
 
@@ -88,13 +88,13 @@ def parse_battery_level_hex_to_numeric(battery_raw):
     >>> parse_battery_level_hex_to_numeric('60')
     93.75
     """
-    return 100 * float(battery_raw) / 64.0
+    return int(battery_raw, 16)
 
 
 def pull_measures():
     # Checking temperature and humidity
-    cmd = "timeout 60 gatttool -b " + YOUR_PROBE_MAC_ADDRESS + \
-          " --char-write-req --handle=0x10 -n 0100 --listen" + \
+    cmd = "timeout 20 gatttool -b " + YOUR_PROBE_MAC_ADDRESS + \
+          " --char-write-req --handle='0x0038' -n 0100 --listen" + \
           " | head -n 2 | tail -n 1"
     data_raw = run_cmd(cmd)
     if not data_raw.startswith("Notification handle = "):
@@ -103,8 +103,8 @@ def pull_measures():
     measures = parse_temperature_humidity_plaintext_to_numeric(data_hex)
 
     # Checking the battery level
-    cmd = "timeout 60 gatttool -b " + YOUR_PROBE_MAC_ADDRESS + \
-          " --char-read --handle=0x18"
+    cmd = "timeout 20 gatttool -b " + YOUR_PROBE_MAC_ADDRESS + \
+          " --char-read --handle=0x001b"
     battery_raw = run_cmd(cmd).split(':')[-1].strip()
     battery = parse_battery_level_hex_to_numeric(battery_raw)
     measures['battery_level'] = battery
