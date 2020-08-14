@@ -93,17 +93,19 @@ def parse_battery_level_hex_to_numeric(battery_raw):
 
 def pull_measures():
     # Checking temperature and humidity
-    cmd = "timeout 20 gatttool -b " + YOUR_PROBE_MAC_ADDRESS + \
-          " --char-write-req --handle='0x0038' -n 0100 --listen" + \
+    cmd = "timeout 12 gatttool -b " + YOUR_PROBE_MAC_ADDRESS + \
+          " --char-read --handle='0x0038' --listen" + \
           " | head -n 2 | tail -n 1"
     data_raw = run_cmd(cmd)
+    if "Device or resource busy" in data_raw:
+        run_cmd("hciconfig hci0 reset")
     if not data_raw.startswith("Notification handle = "):
         raise IOError(data_raw)
     data_hex = parse_temperature_humidity_hex_to_plaintext(data_raw)
     measures = parse_temperature_humidity_plaintext_to_numeric(data_hex)
 
     # Checking the battery level
-    cmd = "timeout 20 gatttool -b " + YOUR_PROBE_MAC_ADDRESS + \
+    cmd = "timeout 12 gatttool -b " + YOUR_PROBE_MAC_ADDRESS + \
           " --char-read --handle=0x001b"
     battery_raw = run_cmd(cmd).split(':')[-1].strip()
     battery = parse_battery_level_hex_to_numeric(battery_raw)
